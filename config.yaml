@@ -1,0 +1,4 @@
+user: "user@abc.com"
+password: "mypassword"
+step_min: 10000
+step_max: 15000
