@@ -4,7 +4,8 @@ import random
 import time
 import datetime
 import yaml
-
+import urllib
+from Crypto.Cipher import AES
 def get_time_stamp():
     r""" 获取时间戳，例如：1682583902000
 
@@ -15,8 +16,22 @@ def get_time_stamp():
     t = response['data']['t']
     return t
 
+# 参考自 https://github.com/hanximeng/Zepp_API/blob/main/index.php
+def encrypt_data(plain: bytes) -> bytes:
+    key = b'xeNtBVqzDc6tuNTh'  # 16 bytes
+    iv = b'MAAAYAAAAAAAAABg'  # 16 bytes
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    # AES-128-CBC 使用 PKCS#7 填充。
+    pad_len = AES.block_size - (len(plain) % AES.block_size)
+    padded = plain + bytes([pad_len]) * pad_len
+    return cipher.encrypt(padded)
 
-def loginGetCode(user, password):
+# 虚拟ip地址
+def get_fake_ip():
+    # 随便找的国内IP段：223.64.0.0 - 223.117.255.255
+    return f"{223}.{random.randint(64, 117)}.{random.randint(0, 255)}.{random.randint(0, 255)}"
+
+def loginGetCode(user, password,fake_ip):
     r"""1、登录获取Code
 
     :param user: 账号：邮箱/手机号
@@ -40,9 +55,22 @@ def loginGetCode(user, password):
     }
     headers = {
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2"
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2",
+        "app_name": "com.xiaomi.hm.health",
+        "appname": "com.xiaomi.hm.health",
+        "appplatform": "android_phone",
+        "x-hm-ekv": "1",
+        "hm-privacy-ceip": "false",
+        "X-Forwarded-For": fake_ip
     }
-    r1 = requests.post(url, data=data, headers=headers, allow_redirects=False)
+    # 等同 http_build_query，默认使用 quote_plus 将空格转为 '+'
+    query = urllib.parse.urlencode(data)
+    plaintext = query.encode('utf-8')
+    # 执行请求加密
+    cipher_data = encrypt_data(plaintext)
+
+
+    r1 = requests.post(url, data=cipher_data, headers=headers, allow_redirects=False)
     location = r1.headers["Location"]
     print("成功获取Location")
     print(location)
@@ -54,7 +82,7 @@ def loginGetCode(user, password):
     return is_phone, code
 
 
-def getLoginToken(code, is_phone):
+def getLoginToken(code, is_phone, fake_ip):
     r"""2、获取login_token
 
     :param code: code
@@ -73,6 +101,7 @@ def getLoginToken(code, is_phone):
             "device_model": "phone",
             "grant_type": "access_token",
             "third_name": "huami_phone",
+            "X-Forwarded-For": fake_ip
         }
     else:
         data = {
@@ -107,11 +136,11 @@ def getLoginToken(code, is_phone):
 
 # def getAppToken(login_token):
 #     r"""3、获取app_token
-# 
+#
 #     :param login_token: login_token
 #     :return: app_token
 #     """
-# 
+#
 #     url = f"https://account-cn.huami.com/v1/client/app_tokens?app_name=com.xiaomi.hm.health&dn=api-user.huami.com%2Capi-mifit.huami.com%2Capp-analytics.huami.# com&login_token={login_token}"
 #     response = requests.get(url).json()
 #     app_token = response['token_info']['app_token']
@@ -174,16 +203,17 @@ def main(_user, _password, _step_min, _step_max):
     print("已设置为随机步数:" + step)
     if user == '' or password == '':
         return "请正确填写用户名或密码"
+    fake_ip=get_fake_ip();
     # 获取code
-    is_phone, code = loginGetCode(user, password)
+    is_phone, code = loginGetCode(user, password,fake_ip)
     if code == 0:
         return "登录失败"
     # 获取login_token
-    userid, app_token = getLoginToken(code, is_phone)
+    userid, app_token = getLoginToken(code, is_phone,fake_ip)
 
     #     app_token = getAppToken(login_token)
     # 刷步数
-    # brush, 
+    # brush,
     message = brushStep(app_token, userid, step)
     # 根据服务器时间设置，如果你是在github执行，时间为UTC时间，即北京时间-8
     time_bj = datetime.datetime.today() + datetime.timedelta(hours=8)
