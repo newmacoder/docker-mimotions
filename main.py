@@ -228,9 +228,47 @@ def main(_user, _password, _step_min, _step_max):
 
 
 if __name__ == '__main__':
-    ##刷步数
-    with open('config.yaml') as f:
-        config = yaml.safe_load(f)
-    res = main(config["user"], config["password"], config["step_min"], config["step_max"])
-    # # 推送消息
-    # pushMessage("pushplus的token", "刷步接口调用", res)
+    # 刷步数
+    try:
+        with open('config.yaml', 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+    except FileNotFoundError:
+        print("未找到 config.yaml 文件，请检查路径！")
+        exit()
+
+    users = config.get("users", [])
+    if not users:
+        print("配置文件中未找到账户信息，请检查 config.yaml 格式。")
+        exit()
+
+    all_results = []
+
+    # 遍历处理每一个账户
+    for index, account in enumerate(users):
+        user = account.get("user")
+        password = account.get("password")
+        step_min = account.get("step_min")
+        step_max = account.get("step_max")
+
+        print(f"\n--- 开始处理第 {index + 1} 个账号: {user} ---")
+
+        try:
+            # 调用原有的 main 函数
+            res = main(user, password, step_min, step_max)
+            all_results.append(res)
+        except Exception as e:
+            error_msg = f"账号 {user} 执行出现异常: {str(e)}"
+            print(error_msg)
+            all_results.append(error_msg)
+
+        # 如果不是最后一个账户，则随机休眠 3~8 秒，防止并发过高被封 IP
+        if index < len(users) - 1:
+            sleep_time = random.randint(3, 8)
+            print(f"为防止风控，等待 {sleep_time} 秒后继续下一个账号...")
+            time.sleep(sleep_time)
+
+    # 汇总所有结果并推送 (可选)
+    # final_message = "<br>".join(all_results).replace("\n", "<br>")
+    # pushMessage("你的pushplus_token", "批量刷步执行结果", final_message)
+
+    print("\n所有账户处理完毕！")

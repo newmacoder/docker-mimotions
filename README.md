@@ -16,10 +16,15 @@ date
 ## 创建config.yaml文件
 
 ```
-user: "user@abc.com"
-password: "mypassword"
-step_min: 10000
-step_max: 15000
+users:
+  - user: "user1@abc.com"
+    password: "mypasswor"
+    step_min: 24000
+    step_max: 29000
+  - user: "user2@abc.com" 
+    password: "mypasswor"
+    step_min: 8000
+    step_max: 10000
 ```
 
 ## 创建Dockerfile
@@ -48,7 +53,6 @@ CMD ["python", "main.py"]
 
 ```
 docker build -t mimotions .
-docker run mimotions
 docker run --rm mimotions
 ```
 
